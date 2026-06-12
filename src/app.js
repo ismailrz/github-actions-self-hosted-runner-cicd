@@ -1,11 +1,12 @@
 const express = require('express');
+const path = require('path');
 const { add, subtract, multiply, divide } = require('./calculator');
 
 const app = express();
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.json({ name: 'cicd-practice-app', endpoints: ['/health', '/calculate'] });
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/health', (req, res) => {

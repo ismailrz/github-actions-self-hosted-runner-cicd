@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitHub Actions Self-Hosted Runner on AWS EC2</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      line-height: 1.7;
+    }
+
+    header {
+      background: linear-gradient(135deg, #161b22 0%, #1f2937 100%);
+      border-bottom: 1px solid #30363d;
+      padding: 48px 24px;
+      text-align: center;
+    }
+
+    header .badge {
+      display: inline-block;
+      background: #238636;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    header h1 {
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: #f0f6fc;
+      margin-bottom: 12px;
+    }
+
+    header p {
+      font-size: 1.1rem;
+      color: #8b949e;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 48px 24px; }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #f0f6fc;
+      margin: 40px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    h3 { font-size: 1.1rem; color: #e6edf3; margin: 24px 0 8px; font-weight: 600; }
+
+    p { color: #8b949e; margin-bottom: 12px; }
+
+    .arch {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 24px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 13px;
+      color: #79c0ff;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.6;
+    }
+
+    .steps { counter-reset: step; list-style: none; }
+    .steps li {
+      counter-increment: step;
+      position: relative;
+      padding: 16px 16px 16px 56px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #1f6feb;
+      color: #fff;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .steps li strong { color: #e6edf3; display: block; margin-bottom: 4px; }
+
+    code {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 85%;
+      color: #79c0ff;
+    }
+
+    pre {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 13px;
+      color: #e6edf3;
+    }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .card .icon { font-size: 1.6rem; margin-bottom: 10px; }
+    .card h3 { margin: 0 0 6px; font-size: 1rem; color: #f0f6fc; }
+    .card p { font-size: 0.88rem; margin: 0; }
+
+    .api-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .api-table th {
+      background: #161b22;
+      color: #8b949e;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid #30363d;
+    }
+    .api-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #21262d;
+      font-size: 14px;
+    }
+    .api-table tr:last-child td { border-bottom: none; }
+    .method {
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .get  { background: #1a4a1a; color: #56d364; }
+    .post { background: #1a3a5c; color: #79c0ff; }
+
+    .status-bar {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      margin-top: 16px;
+    }
+    .dot { width: 10px; height: 10px; background: #56d364; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    footer {
+      border-top: 1px solid #21262d;
+      text-align: center;
+      padding: 32px 24px;
+      color: #484f58;
+      font-size: 13px;
+      margin-top: 48px;
+    }
+    footer a { color: #58a6ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="badge">Live on AWS EC2</div>
+  <h1>GitHub Actions Self-Hosted Runner</h1>
+  <p>A complete CI/CD pipeline running on an AWS EC2 self-hosted runner with matrix builds, Docker, and environment approvals.</p>
+</header>
+
+<div class="container">
+
+  <!-- Live status -->
+  <div class="status-bar">
+    <div class="dot"></div>
+    <span>Runner is <strong style="color:#56d364">online</strong> &mdash; this page is being served from the EC2 instance running the GitHub Actions runner.</span>
+  </div>
+
+  <!-- What is a self-hosted runner -->
+  <h2>What is a Self-Hosted Runner?</h2>
+  <p>
+    A <strong style="color:#e6edf3">self-hosted runner</strong> is a machine you manage yourself that runs GitHub Actions workflow jobs.
+    Unlike GitHub-hosted runners (which spin up a fresh VM per job on GitHub's infrastructure),
+    a self-hosted runner is always-on, runs on your own hardware or cloud instance, and gives you
+    full control over the environment — installed software, network access, IAM roles, disk size, and cost.
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="icon">☁️</div>
+      <h3>GitHub-Hosted Runner</h3>
+      <p>Fresh VM per job. Managed by GitHub. Limited to 6h jobs. Costs minutes from your quota. No persistent state.</p>
+    </div>
+    <div class="card">
+      <div class="icon">🖥️</div>
+      <h3>Self-Hosted Runner</h3>
+      <p>Your own machine. Persistent state between jobs. Access to private VPCs. Free compute (you pay AWS). Full control.</p>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <h2>Pipeline Architecture</h2>
+
+  <div class="arch">Push / PR to GitHub
+      │
+      ▼
+┌─────────────────────────────────────────────────┐
+│                   CI Workflow                    │
+│                                                  │
+│  lint ──► test (Node 18 │ 20 │ 22) ──► build   │
+│                   matrix                         │
+└─────────────────────────────────────────────────┘
+      │  merge to main
+      ▼
+┌─────────────────────────────────────────────────┐
+│                   CD Workflow                    │
+│                                                  │
+│  ci-gate ──► deploy staging ──► [approval]      │
+│                                      │           │
+│                                      ▼           │
+│                              deploy production   │
+└─────────────────────────────────────────────────┘
+           ▲
+           │  all jobs run on
+      ┌────┴────┐
+      │  EC2    │  t3.micro · Ubuntu · Docker · AWS CLI
+      │ Runner  │  /opt/github-runner
+      └─────────┘</div>
+
+  <!-- How to set up -->
+  <h2>How to Run This on AWS</h2>
+
+  <h3>Prerequisites</h3>
+  <ul style="color:#8b949e; padding-left:20px; margin-bottom:16px;">
+    <li>AWS account with an EC2 key pair</li>
+    <li>GitHub repository (this one: <code>ismailrz/github-actions-self-hosted-runner-cicd</code>)</li>
+    <li>EC2 instance — Ubuntu 22.04+, t3.micro or larger, 20GB root volume</li>
+    <li>Security group: outbound 443 open (runner phones home to GitHub)</li>
+  </ul>
+
+  <ol class="steps">
+    <li>
+      <strong>Launch an EC2 instance</strong>
+      Ubuntu 22.04 AMI · t3.micro · 20GB gp3 EBS volume · assign a security group with outbound HTTPS.
+    </li>
+    <li>
+      <strong>Copy the setup script to EC2</strong>
+      <pre><code>scp -i ~/your-key.pem scripts/setup-ec2-runner.sh \
+    ubuntu@&lt;EC2-IP&gt;:~/</code></pre>
+    </li>
+    <li>
+      <strong>Get a registration token from GitHub</strong>
+      Go to <em>Repo → Settings → Actions → Runners → New self-hosted runner</em> and copy the <code>--token</code> value.
+    </li>
+    <li>
+      <strong>SSH in and run the setup script</strong>
+      <pre><code>ssh -i ~/your-key.pem ubuntu@&lt;EC2-IP&gt;
+
+chmod +x ~/setup-ec2-runner.sh
+~/setup-ec2-runner.sh \
+  --repo   https://github.com/ismailrz/github-actions-self-hosted-runner-cicd \
+  --token  &lt;YOUR-TOKEN&gt; \
+  --name   ec2-runner-prod \
+  --labels self-hosted,linux,x64,ec2</code></pre>
+      The script installs Docker, AWS CLI, downloads the runner binary, registers it with GitHub, and starts it as a <code>systemd</code> service.
+    </li>
+    <li>
+      <strong>Confirm the runner is online</strong>
+      Go to <em>Settings → Actions → Runners</em> — you should see <strong style="color:#56d364">Idle</strong> next to your runner.
+    </li>
+    <li>
+      <strong>Push code and watch CI run</strong>
+      Any push to <code>main</code> or <code>develop</code> triggers the CI workflow on your EC2 runner.
+    </li>
+  </ol>
+
+  <!-- Manage runner -->
+  <h2>Managing the Runner</h2>
+  <pre><code># Check status
+sudo systemctl status actions.runner.*.service
+
+# Live logs
+sudo journalctl -u actions.runner.*.service -f
+
+# Restart
+sudo systemctl restart actions.runner.*.service
+
+# Remove runner
+cd /opt/github-runner
+sudo ./svc.sh stop &amp;&amp; sudo ./svc.sh uninstall
+./config.sh remove --token &lt;REMOVE_TOKEN&gt;</code></pre>
+
+  <!-- API -->
+  <h2>App API Endpoints</h2>
+  <table class="api-table">
+    <thead>
+      <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/</code></td>
+        <td>This page</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/health</code></td>
+        <td>Health check — returns app version and status</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/calculate</code></td>
+        <td>Calculator — operations: <code>add</code>, <code>subtract</code>, <code>multiply</code>, <code>divide</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Example</h3>
+  <pre><code>curl -X POST http://localhost:3000/calculate \
+  -H "Content-Type: application/json" \
+  -d '{"operation": "add", "a": 5, "b": 3}'
+
+# {"result": 8}</code></pre>
+
+</div>
+
+<footer>
+  <p>Built with Node.js · Express · GitHub Actions · AWS EC2</p>
+  <p style="margin-top:6px"><a href="https://github.com/ismailrz/github-actions-self-hosted-runner-cicd">github.com/ismailrz/github-actions-self-hosted-runner-cicd</a></p>
+</footer>
+
+</body>
+</html>
