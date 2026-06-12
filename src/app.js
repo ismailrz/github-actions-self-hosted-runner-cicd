@@ -4,6 +4,10 @@ const { add, subtract, multiply, divide } = require('./calculator');
 const app = express();
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.json({ name: 'cicd-practice-app', endpoints: ['/health', '/calculate'] });
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', version: process.env.APP_VERSION || '1.0.0' });
 });

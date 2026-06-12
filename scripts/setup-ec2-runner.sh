@@ -51,7 +51,7 @@ echo ""
 echo "[1/6] Installing system dependencies..."
 sudo apt-get update -qq
 sudo apt-get install -y -qq \
-  curl jq git tar gzip \
+  curl jq git tar gzip unzip \
   apt-transport-https ca-certificates gnupg lsb-release
 
 # Docker
