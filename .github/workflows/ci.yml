@@ -23,7 +23,15 @@ jobs:
           cache: "npm"             # caches ~/.npm between runs
 
       - name: Install dependencies
-        run: npm install --include=dev
+        run: |
+          echo "=== Working directory ==="
+          pwd
+          echo "=== Directory contents ==="
+          ls -la
+          echo "=== npm install ==="
+          npm install --include=dev
+          echo "=== node_modules/.bin after install ==="
+          ls node_modules/.bin/ | head -20 || echo "node_modules/.bin missing"
 
       - name: Debug install
         run: |
