@@ -25,8 +25,15 @@ jobs:
       - name: Install dependencies
         run: npm install --include=dev
 
+      - name: Debug install
+        run: |
+          echo "node: $(node --version)"
+          echo "npm:  $(npm --version)"
+          echo "NODE_ENV: ${NODE_ENV:-unset}"
+          ls node_modules/.bin/eslint && echo "eslint binary: OK" || echo "eslint binary: MISSING"
+
       - name: Run ESLint
-        run: npm run lint
+        run: ./node_modules/.bin/eslint src/ tests/
 
   test:
     name: Test (Node ${{ matrix.node-version }})
