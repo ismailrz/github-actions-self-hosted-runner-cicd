@@ -16,7 +16,7 @@ on:
         description: "Docker image tag that was built"
         value: ${{ jobs.build.outputs.image-tag }}
     secrets:
-      inherit: true                # all caller secrets forwarded automatically
+      inherit
 
 jobs:
   build:
