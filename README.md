@@ -1,4 +1,4 @@
-# GitHub Actions Self-Hosted Runner CI/CD
+# GitHub Actions Self-Hosted Runner CI/CD  /Ismail
 
 A practice project demonstrating a full CI/CD pipeline using GitHub Actions with an AWS EC2 self-hosted runner. Includes matrix builds, dependency caching, Docker image publishing to ECR, environment protection rules, and manual approval gates.
 
