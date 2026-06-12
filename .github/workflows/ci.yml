@@ -54,9 +54,7 @@ jobs:
           npm_config_registry: https://registry.npmjs.org
 
       - name: Run tests with coverage
-        run: npm test -- --ci --reporters=default --reporters=jest-junit
-        env:
-          JEST_JUNIT_OUTPUT_DIR: ./test-results
+        run: npm test -- --ci
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
