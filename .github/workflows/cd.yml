@@ -1,0 +1,159 @@
+# CD workflow — triggers on merge to main
+# Demonstrates: environment protection (manual approval), secrets, deploy steps,
+#               reusable workflow call, conditional steps, job summaries
+
+name: CD
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:               # allow manual trigger from GitHub UI
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options: ["staging", "production"]
+      skip_tests:
+        description: "Skip test gate (emergency deploy)"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  # ── 1. Re-run CI as a gate ──────────────────────────────────────────────────
+  ci-gate:
+    name: CI Gate
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      node-version: "20"
+    secrets: inherit
+    if: ${{ !inputs.skip_tests }}
+
+  # ── 2. Deploy to Staging ────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy → Staging
+    runs-on: self-hosted
+    needs: [ci-gate]
+    if: always() && (needs.ci-gate.result == 'success' || needs.ci-gate.result == 'skipped')
+
+    environment:
+      name: staging                # requires "staging" environment to exist in repo settings
+      url: http://${{ vars.STAGING_HOST }}:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-info
+          path: dist/
+        continue-on-error: true    # artifact may not exist on manual trigger
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPO_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg APP_VERSION=${{ github.ref_name }}-${{ github.run_number }} \
+            --build-arg COMMIT_SHA=${{ github.sha }} \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:staging \
+            .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:staging
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy to staging EC2
+        env:
+          DEPLOY_HOST: ${{ vars.STAGING_HOST }}
+          DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
+          IMAGE: ${{ steps.build-image.outputs.image }}
+        run: bash scripts/deploy.sh staging "$IMAGE"
+
+      - name: Smoke test staging
+        run: |
+          sleep 5
+          curl --retry 5 --retry-delay 3 --fail \
+            http://${{ vars.STAGING_HOST }}:3000/health
+
+      - name: Write job summary
+        run: |
+          echo "## Staging Deploy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Key | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ steps.build-image.outputs.image }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| URL | http://${{ vars.STAGING_HOST }}:3000 |" >> $GITHUB_STEP_SUMMARY
+
+  # ── 3. Deploy to Production (requires manual approval) ──────────────────────
+  deploy-production:
+    name: Deploy → Production
+    runs-on: self-hosted
+    needs: [deploy-staging]
+
+    environment:
+      name: production             # "production" environment must have a protection rule
+      url: http://${{ vars.PROD_HOST }}:3000  # with required reviewers set in repo settings
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Promote staging image to production tag
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPO_NAME }}
+        run: |
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:staging
+          docker tag  $ECR_REGISTRY/$ECR_REPOSITORY:staging \
+                      $ECR_REGISTRY/$ECR_REPOSITORY:production
+          docker tag  $ECR_REGISTRY/$ECR_REPOSITORY:staging \
+                      $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:production
+
+      - name: Deploy to production EC2
+        env:
+          IMAGE: ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPO_NAME }}:${{ github.sha }}
+        run: bash scripts/deploy.sh production "$IMAGE"
+
+      - name: Smoke test production
+        run: |
+          sleep 5
+          curl --retry 5 --retry-delay 3 --fail \
+            http://${{ vars.PROD_HOST }}:3000/health
+
+      - name: Write job summary
+        run: |
+          echo "## Production Deploy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Key | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployed by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| URL | http://${{ vars.PROD_HOST }}:3000 |" >> $GITHUB_STEP_SUMMARY

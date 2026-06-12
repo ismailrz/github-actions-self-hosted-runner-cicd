@@ -1,0 +1,57 @@
+# Reusable workflow — called by cd.yml's ci-gate job
+# Demonstrates: workflow_call trigger, inputs/outputs, secrets inheritance
+
+name: Reusable Build
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node.js version to use"
+        required: false
+        default: "20"
+        type: string
+    outputs:
+      image-tag:
+        description: "Docker image tag that was built"
+        value: ${{ jobs.build.outputs.image-tag }}
+    secrets:
+      inherit: true                # all caller secrets forwarded automatically
+
+jobs:
+  build:
+    name: Build (reusable)
+    runs-on: self-hosted
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --ci
+
+      - name: Build
+        id: meta
+        run: |
+          npm run build
+          echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info
+          path: dist/
+          retention-days: 1

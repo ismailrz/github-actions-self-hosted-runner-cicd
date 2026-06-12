@@ -1,0 +1,46 @@
+# Runner health check — scheduled + manual trigger
+# Demonstrates: scheduled workflows, runner diagnostics, cron syntax
+
+name: Runner Health Check
+
+on:
+  schedule:
+    - cron: "0 * * * *"           # every hour
+  workflow_dispatch:
+
+jobs:
+  health:
+    name: Runner Diagnostics
+    runs-on: self-hosted
+    timeout-minutes: 5
+
+    steps:
+      - name: System info
+        run: |
+          echo "=== Runner Info ==="
+          echo "Hostname:   $(hostname)"
+          echo "OS:         $(uname -a)"
+          echo "User:       $(whoami)"
+          echo "Runner dir: $RUNNER_WORKSPACE"
+          echo ""
+          echo "=== Disk ==="
+          df -h /
+          echo ""
+          echo "=== Memory ==="
+          free -h || vm_stat
+          echo ""
+          echo "=== Docker ==="
+          docker info --format '{{.ServerVersion}}' 2>/dev/null || echo "Docker not available"
+          echo ""
+          echo "=== Node ==="
+          node --version 2>/dev/null || echo "Node not installed"
+          echo ""
+          echo "=== AWS CLI ==="
+          aws --version 2>/dev/null || echo "AWS CLI not installed"
+
+      - name: Write summary
+        run: |
+          echo "## Runner Health: $(hostname)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Disk free:** $(df -h / | tail -1 | awk '{print $4}')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** healthy" >> $GITHUB_STEP_SUMMARY
